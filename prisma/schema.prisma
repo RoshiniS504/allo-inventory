@@ -1,0 +1,47 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["clientExtensions"]
+}
+
+model Product {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  price       Float
+  inventories Inventory[]
+  reservations Reservation[]
+}
+
+model Warehouse {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  inventories Inventory[]
+  reservations Reservation[]
+}
+
+model Inventory {
+  id           Int       @id @default(autoincrement())
+  product      Product   @relation(fields: [productId], references: [id])
+  productId    Int
+  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
+  warehouseId  Int
+  quantity     Int
+  @@unique([productId, warehouseId])
+}
+
+model Reservation {
+  id          Int       @id @default(autoincrement())
+  product     Product   @relation(fields: [productId], references: [id])
+  productId   Int
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  warehouseId Int
+  quantity    Int
+  status      String    @default("PENDING")
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  @@index([status, expiresAt])
+}
