@@ -407,23 +407,30 @@ export default function HomePage() {
                 >
                   Select Warehouse Location
                 </label>
-                <select
-                  id="warehouse"
-                  value={selectedWarehouseId}
-                  onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                  className="w-full bg-white border border-[#E1E8EF] rounded-[10px] h-[42px] px-3 text-sm text-[#0F172A] focus:outline-none focus:border-[#0F6FBF] focus:ring-4 focus:ring-[#0F6FBF]/10 transition-all duration-150"
-                >
-                  {selectedProduct?.stocks.map((stock) => (
-                    <option
-                      key={stock.warehouseId}
-                      value={stock.warehouseId}
-                      disabled={stock.availableUnits <= 0}
-                    >
-                      {stock.warehouse.name} ({stock.warehouse.location}) —{" "}
-                      {stock.availableUnits} left
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    id="warehouse"
+                    value={selectedWarehouseId}
+                    onChange={(e) => setSelectedWarehouseId(e.target.value)}
+                    className="w-full bg-white border border-[#E1E8EF] rounded-[10px] h-[42px] pl-3 pr-10 text-sm text-[#0F172A] appearance-none focus:outline-none focus:border-[#0F6FBF] focus:ring-4 focus:ring-[#0F6FBF]/10 transition-all duration-150"
+                  >
+                    {selectedProduct?.stocks.map((stock) => (
+                      <option
+                        key={stock.warehouseId}
+                        value={stock.warehouseId}
+                        disabled={stock.availableUnits <= 0}
+                        className="bg-white text-[#0F172A] py-2"
+                      >
+                        {stock.warehouse.name} ({stock.warehouse.location}) — {stock.availableUnits} left
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-[#94A3B8]">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               {/* Quantity */}
