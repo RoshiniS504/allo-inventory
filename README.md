@@ -1,90 +1,71 @@
-# Allo Health Inventory Reservation System
+# Allo Inventory Reservation System
 
-## 🚀 Overview
-A production‑grade inventory reservation system built with **Next.js 14**, **TypeScript**, **Prisma (PostgreSQL)**, **Upstash Redis**, and **shadcn/ui**.  It provides a race‑condition‑free workflow where a product is held for 10 minutes during checkout, confirmed on successful payment, or automatically released on timeout/failure.
+## Live URL
+[https://allo-inventory.vercel.app](https://allo-inventory.vercel.app)
 
-## ✨ Features
-- **Atomic row‑level locking** with `SELECT FOR UPDATE` via Prisma transactions – guarantees a single reservation per stock item.
-- **Idempotency** powered by Upstash Redis – safe retries for the reservation endpoint.
-- **Server‑less ready** – fully deployable on Vercel (including a Vercel Cron for expiration).
-- **Typed validation** with Zod – all API inputs are type‑checked.
-- **Beautiful UI** using TailwindCSS + shadcn/ui (Card, Button, Badge, Dialog, Sonner toast).
-- **CI‑ready** – linting, formatting, and type‑checking are configured out‑of‑the‑box.
+## Local setup
+1. Clone the repo:
+   ```bash
+   git clone https://github.com/sroshini504/allo-inventory.git
+   cd allo-inventory
+   ```
+2. Copy `.env.example` to `.env.local` (and `.env` for Prisma CLI) and fill in the connection details:
+   ```bash
+   cp .env.example .env.local
+   cp .env.example .env
+   ```
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+4. Generate the Prisma client:
+   ```bash
+   npx prisma generate
+   ```
+5. Apply database migrations:
+   ```bash
+   npx prisma migrate dev --name init
+   ```
+6. Seed the database with initial products, warehouses, stock, and reservations:
+   ```bash
+   npx prisma db seed
+   ```
+7. Start the local development server:
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) to view the application.
 
-## 📦 Tech Stack
-| Layer | Technology |
-|------|------------|
-| Frontend | Next.js 14 (App Router), TypeScript, TailwindCSS, shadcn/ui |
-| Backend | Next.js API Routes, Prisma 5.20, Neon PostgreSQL |
-| Cache / Idempotency | Upstash Redis (HTTP client) |
-| Validation | Zod |
-| Deployment | Vercel (incl. `vercel.json` cron) |
+Services needed: Neon (free Postgres), Upstash (free Redis)
 
-## 🛠️ Setup & Development
-```bash
-# 1️⃣ Clone the repository (or use the existing folder)
-git clone https://github.com/your-org/allo-inventory.git
-cd allo-inventory
+## How the expiry mechanism works in production
+The system uses a **two-layer expiration approach** to handle reservation releases:
+- **Lazy cleanup (Layer 1)**: The calculation of `availableUnits` in `GET /api/products` filters out any `PENDING` reservations where `expiresAt <= NOW()`. Even if the database has not yet been cleaned up by a cron job, users browsing the catalog will see 100% accurate real-time stock numbers.
+- **Vercel Cron (Layer 2)**: A cron job runs every minute (configured via `vercel.json` pointing to `/api/cron/expire-reservations`) to identify expired reservations, update their status to `RELEASED`, and release (decrement) the reserved units back to available stock. This endpoint is secured using a `CRON_SECRET` checked via the standard `Authorization` header.
 
-# 2️⃣ Install dependencies
-npm ci   # exact versions as defined in package‑lock
+## Concurrency approach
+The naive reservation pattern (read available stock → check if there is enough → create reservation) contains a race condition: two concurrent users could see "1 unit left" at the same time and both complete the checkout, resulting in overselling.
 
-# 3️⃣ Create a .env.local (copy from .env.example)
-cp .env.example .env.local
-#    - Fill in YOUR_NEON_DATABASE_URL, UPSTASH_REDIS_REST_URL and TOKEN
+This system guarantees correctness using a **Neon/PostgreSQL row-level lock** inside a transaction:
+1. When a reservation request comes in, a database transaction is started.
+2. We query the stock row using `SELECT * FROM "Stock" WHERE id = $1 FOR UPDATE`. This locks the row for modifications.
+3. If a concurrent request comes in for the same stock row, PostgreSQL blocks the second transaction at the `FOR UPDATE` read until the first transaction either commits or aborts.
+4. When the first transaction commits, the second transaction is unblocked. It re-reads the updated `reservedUnits` value.
+5. If the remaining units are insufficient, it immediately throws a business error, returning a `409 Conflict`.
+This ensures correctness under concurrent request volumes without requiring complex distributed locks (like Redlock) at the app layer.
 
-# 4️⃣ Push the Prisma schema to Neon
-npx prisma migrate dev --name init
+## Idempotency key implementation (bonus)
+Clients submit an `Idempotency-Key` header with `POST /api/reservations`.
+1. The server checks Upstash Redis for a cached response with key `idempotency:<idempotencyKey>`.
+2. If it exists, the cached response body and status code (such as `201` or `409`) are returned immediately.
+3. If it does not exist, the server proceeds with the Zod validation and transactional reservation logic.
+4. On terminal completion (success `201` OR `409` stock conflict), the JSON response and status code are cached in Redis for 24 hours.
+This protects against network disconnect retries causing duplicate inventory reservations.
 
-# 5️⃣ Seed the database with sample data
-npx prisma db seed   # runs prisma/seed.ts
-
-# 6️⃣ Run the dev server
-npm run dev   # http://localhost:3000
-```
-
-## 📜 API Endpoints
-| Method | Path | Purpose |
-|--------|------|---------|
-| **GET** | `/api/products` | List all products with availability |
-| **POST** | `/api/reservations` | Reserve stock – idempotent (requires `idempotencyKey`) |
-| **GET** | `/api/reservations/[id]` | Fetch reservation status |
-| **POST** | `/api/reservations/[id]/confirm` | Mark reservation as paid → finalize |
-| **POST** | `/api/reservations/[id]/release` | Manually release a hold |
-| **GET** | `/api/cron/expire-reservations` | Vercel cron (runs every minute) – releases stale holds |
-
-All request bodies are validated with Zod schemas located in `src/lib/schemas.ts`.
-
-## 🎨 UI Walkthrough
-- **Home page** (`/`) – product catalog with real‑time availability badges.
-- **Reservation modal** – click *Reserve* to hold stock for 10 min, shows a countdown timer.
-- **Checkout page** (`/reservation/[id]`) – confirms payment or releases automatically after timeout.
-
-## 📦 Scripts
-| Script | Description |
-|--------|-------------|
-| `dev` | Starts Next.js dev server |
-| `build` | Generates the production build |
-| `start` | Starts the built app (Node) |
-| `lint` | Runs ESLint |
-| `format` | Runs Prettier |
-| `prisma:generate` | Generates Prisma client |
-| `prisma:seed` | Executes `prisma/seed.ts` |
-
-## 🚀 Deployment
-Simply push to the `main` branch on Vercel or run:
-```bash
-vercel --prod
-```
-The included `vercel.json` configures a **cron job** (`* * * * *`) that invokes the expiration endpoint every minute.
-
-## 🧪 Testing
-> *(Add your test suite here – e.g., Jest + React Testing Library)*
-
-## 📚 Further Reading
-- **Concurrency** – see `src/app/api/reservations/handler.ts` for the `SELECT FOR UPDATE` transaction.
-- **Idempotency** – see `src/lib/redis.ts` for the Upstash wrapper.
-- **Zod schemas** – located in `src/lib/schemas.ts`.
-
----
-*Happy coding!*
+## Trade-offs and what I'd add with more time
+- **Real-time Updates**: Implement WebSockets or Server-Sent Events (SSE) to push stock updates to all open client browser windows as reservations are made or expire.
+- **Distributed Locks**: Use Upstash Redlock to manage inventory constraints if deploying across multiple globally-distributed write-replicas.
+- **Session Auth**: Integrate NextAuth.js/Clerk to tie reservations to authenticating users.
+- **Order History**: Build a customer portal containing current active reservations and checkout history.
+- **Confirmation Webhooks**: Set up webhooks to trigger downstream shipping or email confirmation services immediately upon payment confirmation.
+- **API Rate Limiting**: Implement token-bucket rate limiting on the `/api/reservations` endpoint.
