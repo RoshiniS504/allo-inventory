@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Card,
   CardHeader,
@@ -55,7 +56,7 @@ const fetcher = (url: string) => fetch(url).then((res) => {
   return res.json();
 });
 
-export default function ProductsPage() {
+export default function HomePage() {
   const router = useRouter();
   const { data: products, error, isLoading, mutate } = useSWR<Product[]>(
     "/api/products",
@@ -102,24 +103,10 @@ export default function ProductsPage() {
       return;
     }
 
-    const stock = selectedProduct.stocks.find(
-      (s) => s.warehouseId === selectedWarehouseId
-    );
-
-    if (!stock) {
-      toast.error("Selected warehouse stock is not found");
-      return;
-    }
-
-    if (stock.availableUnits < quantity) {
-      toast.error(`Only ${stock.availableUnits} units available at this warehouse`);
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/reservations", {
+      const res = await fetch("/api/reservations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -132,25 +119,42 @@ export default function ProductsPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (response.status === 201) {
-        toast.success("Stock reserved successfully for 10 minutes!");
+      if (res.status === 409) {
+        toast.error("Not enough stock available", {
+          description: "Someone else just reserved the last units. Please try another warehouse.",
+        });
+        mutate(); // update cache
         handleCloseModal();
-        // Refresh products list cache
-        mutate();
-        // Redirect to checkout page
-        router.push(`/reservation/${data.id}`);
-      } else if (response.status === 409) {
-        toast.error("Not enough stock available");
-        // Update local SWR cache immediately if stock changed
-        mutate();
-      } else {
-        toast.error(data.message || "Reservation failed");
+        return;
       }
+
+      if (res.status === 410) {
+        toast.error("Reservation expired", {
+          description: "Your hold timed out. Please reserve again.",
+        });
+        handleCloseModal();
+        return;
+      }
+
+      if (!res.ok) {
+        toast.error("Something went wrong", {
+          description: data.message ?? "Please try again.",
+        });
+        return;
+      }
+
+      // Success — navigate to checkout
+      toast.success("Stock reserved successfully for 10 minutes!");
+      handleCloseModal();
+      mutate();
+      router.push(`/reservation/${data.id}`);
     } catch (err) {
       console.error("Reservation request error:", err);
-      toast.error("An error occurred. Please try again.");
+      toast.error("Network error", {
+        description: "Check your connection and try again.",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -162,6 +166,80 @@ export default function ProductsPage() {
     if (available > 0) return "warning";
     return "error";
   };
+
+  // SWR State Conditionals
+  if (isLoading) {
+    return (
+      <main className="container mx-auto px-4 py-8 max-w-7xl">
+        <header className="mb-10 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between border-b border-slate-800 pb-6 gap-4">
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-500">
+              Allo Health
+            </span>
+            <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">
+              Inventory Reservation System
+            </h1>
+            <p className="mt-2 text-slate-400">
+              Race-condition-free real-time stock allocation and reservation checkout.
+            </p>
+          </div>
+        </header>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-48 w-full rounded-xl" />
+          ))}
+        </div>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="container mx-auto px-4 py-8 max-w-7xl">
+        <header className="mb-10 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between border-b border-slate-800 pb-6 gap-4">
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-500">
+              Allo Health
+            </span>
+            <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">
+              Inventory Reservation System
+            </h1>
+          </div>
+        </header>
+        <div className="flex flex-col items-center justify-center min-h-64 gap-4 border border-rose-500/20 bg-rose-500/5 rounded-xl p-8 max-w-lg mx-auto text-center">
+          <p className="text-rose-400 font-medium">Failed to load products</p>
+          <p className="text-slate-400 text-sm">
+            Check that the database is seeded and the API is reachable.
+          </p>
+          <Button onClick={() => mutate()} className="mt-2" variant="outline">
+            Retry Connection
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!products || products.length === 0) {
+    return (
+      <main className="container mx-auto px-4 py-8 max-w-7xl">
+        <header className="mb-10 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between border-b border-slate-800 pb-6 gap-4">
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-500">
+              Allo Health
+            </span>
+            <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">
+              Inventory Reservation System
+            </h1>
+          </div>
+        </header>
+        <div className="flex flex-col items-center justify-center min-h-64 border border-slate-800 bg-slate-900/30 rounded-xl p-8 max-w-lg mx-auto text-center">
+          <p className="text-slate-400 text-sm">
+            No products found. Run: <code className="bg-slate-950 text-slate-300 px-1.5 py-0.5 rounded font-mono">npx prisma db seed</code>
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="container mx-auto px-4 py-8 max-w-7xl">
@@ -186,83 +264,62 @@ export default function ProductsPage() {
         </div>
       </header>
 
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-64 rounded-xl border border-slate-800 bg-slate-900/30 animate-pulse" />
-          ))}
-        </div>
-      ) : error ? (
-        <div className="text-center py-12 border border-rose-950 bg-rose-950/15 rounded-xl p-8 max-w-lg mx-auto">
-          <svg className="w-12 h-12 text-rose-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <h3 className="text-lg font-bold text-rose-200">Unable to load catalog</h3>
-          <p className="text-slate-400 text-sm mt-1">Please verify database connections and try again.</p>
-          <Button onClick={() => mutate()} className="mt-4" variant="outline">Retry Loading</Button>
-        </div>
-      ) : products && products.length === 0 ? (
-        <div className="text-center py-12 border border-slate-800 bg-slate-900/30 rounded-xl p-8 max-w-lg mx-auto">
-          <p className="text-slate-400">No products found. Please seed the database first.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products?.map((product) => {
-            const hasStock = product.stocks.some((s) => s.availableUnits > 0);
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {products.map((product) => {
+          const hasStock = product.stocks.some((s) => s.availableUnits > 0);
 
-            return (
-              <Card key={product.id} className="flex flex-col hover:border-slate-700 transition duration-300 group">
-                <CardHeader className="flex-1">
-                  <div className="flex justify-between items-start mb-2 gap-2">
-                    <CardTitle className="text-xl font-bold group-hover:text-emerald-400 transition-colors">
-                      {product.name}
-                    </CardTitle>
-                    <span className="text-[10px] font-mono bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700 uppercase shrink-0">
-                      {product.sku}
-                    </span>
-                  </div>
-                  <CardDescription className="line-clamp-2 min-h-[40px]">
-                    {product.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="border-t border-slate-800/60 pt-4">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
-                    Warehouse Stock Status
-                  </h4>
-                  <div className="space-y-2">
-                    {product.stocks.map((stock) => (
-                      <div
-                        key={stock.id}
-                        className="flex justify-between items-center bg-slate-950/40 p-2 rounded-lg border border-slate-800/40"
-                      >
-                        <span className="text-sm font-medium text-slate-300">
-                          {stock.warehouse.name}{" "}
-                          <span className="text-xs text-slate-500">
-                            ({stock.warehouse.location})
-                          </span>
+          return (
+            <Card key={product.id} className="flex flex-col hover:border-slate-700 transition duration-300 group">
+              <CardHeader className="flex-1">
+                <div className="flex justify-between items-start mb-2 gap-2">
+                  <CardTitle className="text-xl font-bold group-hover:text-emerald-400 transition-colors">
+                    {product.name}
+                  </CardTitle>
+                  <span className="text-[10px] font-mono bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700 uppercase shrink-0">
+                    {product.sku}
+                  </span>
+                </div>
+                <CardDescription className="line-clamp-2 min-h-[40px]">
+                  {product.description}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="border-t border-slate-800/60 pt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
+                  Warehouse Stock Status
+                </h4>
+                <div className="space-y-2">
+                  {product.stocks.map((stock) => (
+                    <div
+                      key={stock.id}
+                      className="flex justify-between items-center bg-slate-950/40 p-2 rounded-lg border border-slate-800/40"
+                    >
+                      <span className="text-sm font-medium text-slate-300">
+                        {stock.warehouse.name}{" "}
+                        <span className="text-xs text-slate-500">
+                          ({stock.warehouse.location})
                         </span>
-                        <Badge variant={getBadgeVariant(stock.availableUnits)}>
-                          {stock.availableUnits} units available
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-                <CardFooter className="border-t border-slate-800/60 pt-4 bg-slate-900/10 rounded-b-xl">
-                  <Button
-                    onClick={() => handleOpenReserveModal(product)}
-                    className="w-full font-semibold transition"
-                    variant={hasStock ? "default" : "outline"}
-                    disabled={!hasStock}
-                  >
-                    {hasStock ? "Reserve Product" : "Out of Stock"}
-                  </Button>
-                </CardFooter>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                      </span>
+                      <Badge variant={getBadgeVariant(stock.availableUnits)}>
+                        {stock.availableUnits} units available
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+              <CardFooter className="border-t border-slate-800/60 pt-4 bg-slate-900/10 rounded-b-xl">
+                <Button
+                  onClick={() => handleOpenReserveModal(product)}
+                  className="w-full font-semibold transition"
+                  variant={hasStock ? "default" : "outline"}
+                  disabled={!hasStock}
+                >
+                  {hasStock ? "Reserve Product" : "Out of Stock"}
+                </Button>
+              </CardFooter>
+            </Card>
+          );
+        })}
+      </div>
 
       {/* Reserve Product Modal */}
       <Dialog open={selectedProduct !== null} onOpenChange={handleCloseModal}>

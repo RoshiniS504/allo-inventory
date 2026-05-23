@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,141 +22,127 @@ interface ReservationDetails {
   sku: string;
 }
 
-export default function ReservationPage() {
-  const { id } = useParams();
+export default function ReservationPage({ params }: { params: { id: string } }) {
   const router = useRouter();
 
   const [reservation, setReservation] = useState<ReservationDetails | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<"PENDING" | "CONFIRMED" | "RELEASED">("PENDING");
+  const [localStatus, setLocalStatus] = useState<string>("");
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [clientExpired, setClientExpired] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Fetch reservation details on load
+  // Fetch reservation details
   useEffect(() => {
-    async function fetchReservation() {
-      try {
-        const response = await fetch(`/api/reservations/${id}`);
-        if (!response.ok) {
-          if (response.status === 404) {
+    fetch(`/api/reservations/${params.id}`)
+      .then((r) => {
+        if (!r.ok) {
+          if (r.status === 404) {
             toast.error("Reservation not found");
             router.push("/");
-            return;
+            return null;
           }
           throw new Error("Failed to fetch reservation");
         }
-        const data = await response.json();
-        setReservation(data);
-        setStatus(data.status);
-
-        // Calculate initial remaining time
-        const remaining = Math.max(0, new Date(data.expiresAt).getTime() - Date.now());
-        setTimeLeft(remaining);
-
-        if (remaining <= 0 && data.status === "PENDING") {
-          setClientExpired(true);
+        return r.json();
+      })
+      .then((data) => {
+        if (data) {
+          setReservation(data);
+          setLocalStatus(data.status);
+          const remaining = Math.max(0, new Date(data.expiresAt).getTime() - Date.now());
+          setTimeLeft(remaining);
+          if (remaining === 0 && data.status === "PENDING") {
+            setClientExpired(true);
+            setLocalStatus("EXPIRED");
+          }
         }
-      } catch (err) {
-        console.error("Error fetching reservation:", err);
+      })
+      .catch((err) => {
+        console.error("Error loading reservation details:", err);
         toast.error("Failed to load reservation details");
-      } finally {
+      })
+      .finally(() => {
         setLoading(false);
-      }
-    }
+      });
+  }, [params.id, router]);
 
-    if (id) {
-      fetchReservation();
-    }
-  }, [id, router]);
-
-  // Countdown timer effect
+  // Client-side countdown — do NOT wait for server to declare expiry
   useEffect(() => {
-    if (status !== "PENDING" || clientExpired) return;
-
-    const interval = setInterval(() => {
-      if (!reservation) return;
+    if (localStatus !== "PENDING" || !reservation?.expiresAt) return;
+    const tick = setInterval(() => {
       const remaining = Math.max(0, new Date(reservation.expiresAt).getTime() - Date.now());
       setTimeLeft(remaining);
-
       if (remaining === 0) {
         setClientExpired(true);
-        clearInterval(interval);
+        setLocalStatus("EXPIRED");
+        clearInterval(tick);
       }
     }, 1000);
-
-    return () => clearInterval(interval);
-  }, [reservation, status, clientExpired]);
-
-  // Formatter helper for MM:SS
-  const formatTimeLeft = (ms: number) => {
-    const totalSeconds = Math.ceil(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-  };
+    return () => clearInterval(tick);
+  }, [localStatus, reservation?.expiresAt]);
 
   const handleConfirm = async () => {
-    if (status !== "PENDING" || clientExpired) return;
+    if (localStatus !== "PENDING" || clientExpired) return;
     setIsProcessing(true);
 
     try {
-      const response = await fetch(`/api/reservations/${id}/confirm`, {
+      const res = await fetch(`/api/reservations/${params.id}/confirm`, {
         method: "POST",
       });
+      const data = await res.json();
 
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success("Purchase confirmed successfully!");
-        setStatus("CONFIRMED");
-      } else if (response.status === 410) {
-        toast.error("Reservation has expired");
+      if (res.status === 410) {
+        toast.error("Reservation expired", {
+          description: "Your 10-minute hold has expired.",
+        });
         setClientExpired(true);
-      } else {
-        toast.error(data.message || "Failed to confirm reservation");
+        setLocalStatus("EXPIRED"); // update UI immediately
+        return;
       }
+
+      if (!res.ok) {
+        toast.error("Confirmation failed", { description: data.message });
+        return;
+      }
+
+      toast.success("Purchase confirmed successfully!");
+      setLocalStatus("CONFIRMED"); // update UI immediately — no page refresh
     } catch (err) {
-      console.error("Confirm error:", err);
-      toast.error("An error occurred during confirmation.");
+      toast.error("Network error");
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleRelease = async () => {
-    if (status !== "PENDING") return;
+    if (localStatus !== "PENDING") return;
     setIsProcessing(true);
 
     try {
-      const response = await fetch(`/api/reservations/${id}/release`, {
+      const res = await fetch(`/api/reservations/${params.id}/release`, {
         method: "POST",
       });
+      const data = await res.json();
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (res.ok) {
         toast.success("Reservation cancelled and stock released.");
-        setStatus("RELEASED");
+        setLocalStatus("RELEASED"); // update UI immediately — no page refresh
       } else {
-        toast.error(data.message || "Failed to cancel reservation");
+        toast.error("Cancellation failed", { description: data.message });
       }
     } catch (err) {
-      console.error("Release error:", err);
-      toast.error("An error occurred while releasing the reservation.");
+      toast.error("Network error");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Determine current effective UI state
-  // LOADING, PENDING, CONFIRMED, RELEASED, EXPIRED
-  const isPending = status === "PENDING" && !clientExpired;
-  const isConfirmed = status === "CONFIRMED";
-  const isReleased = status === "RELEASED";
-  const isExpired = clientExpired || (status === "PENDING" && timeLeft <= 0);
+  const displayStatus = clientExpired ? "EXPIRED" : localStatus;
 
-  const isUrgent = isPending && timeLeft < 120000; // < 2 minutes (120,000 ms)
+  const mm = String(Math.floor(timeLeft / 60000)).padStart(2, "0");
+  const ss = String(Math.floor((timeLeft % 60000) / 1000)).padStart(2, "0");
+  const isUrgent = timeLeft < 120000;
 
   if (loading) {
     return (
@@ -193,8 +179,8 @@ export default function ReservationPage() {
   return (
     <main className="container mx-auto px-4 py-12 flex items-center justify-center min-h-[85vh]">
       <div className="max-w-xl w-full">
-        {/* Status indicator banner */}
-        {isConfirmed && (
+        {/* State Banner indicators */}
+        {displayStatus === "CONFIRMED" && (
           <div className="mb-6 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 flex items-center gap-3">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -206,7 +192,7 @@ export default function ReservationPage() {
           </div>
         )}
 
-        {isReleased && (
+        {displayStatus === "RELEASED" && (
           <div className="mb-6 p-4 rounded-xl border border-slate-700 bg-slate-800/20 text-slate-400 flex items-center gap-3">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -218,7 +204,7 @@ export default function ReservationPage() {
           </div>
         )}
 
-        {isExpired && (
+        {displayStatus === "EXPIRED" && (
           <div className="mb-6 p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 flex items-center gap-3">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -230,7 +216,7 @@ export default function ReservationPage() {
           </div>
         )}
 
-        {isPending && (
+        {displayStatus === "PENDING" && (
           <div className="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <span className="relative flex h-3 w-3 shrink-0">
@@ -243,7 +229,7 @@ export default function ReservationPage() {
               </div>
             </div>
             <div className={`text-2xl font-mono font-extrabold px-3 py-1 bg-slate-950/80 border rounded-lg shrink-0 ${isUrgent ? "text-rose-500 border-rose-500/50 animate-pulse" : "text-amber-400 border-amber-500/30"}`}>
-              {formatTimeLeft(timeLeft)}
+              {mm}:{ss}
             </div>
           </div>
         )}
@@ -255,8 +241,8 @@ export default function ReservationPage() {
               <span className="text-xs font-semibold text-emerald-500 uppercase tracking-wider">
                 Hold Transaction Summary
               </span>
-              <Badge variant={isConfirmed ? "success" : isReleased ? "secondary" : isExpired ? "destructive" : "warning"}>
-                {isConfirmed ? "Confirmed" : isReleased ? "Released" : isExpired ? "Expired" : "Pending Hold"}
+              <Badge variant={displayStatus === "CONFIRMED" ? "success" : displayStatus === "RELEASED" ? "secondary" : displayStatus === "EXPIRED" ? "destructive" : "warning"}>
+                {displayStatus === "CONFIRMED" ? "Confirmed" : displayStatus === "RELEASED" ? "Released" : displayStatus === "EXPIRED" ? "Expired" : "Pending Hold"}
               </Badge>
             </div>
             <CardTitle className="text-2xl font-bold mt-2 text-slate-50">
@@ -268,7 +254,6 @@ export default function ReservationPage() {
           </CardHeader>
 
           <CardContent className="py-6 space-y-4">
-            {/* Details Grid */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-950/35 p-3 rounded-lg border border-slate-800/40">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Warehouse</p>
@@ -280,7 +265,6 @@ export default function ReservationPage() {
               </div>
             </div>
 
-            {/* Timestamps */}
             <div className="space-y-2 pt-2 text-xs border-t border-slate-800/40 text-slate-400">
               <div className="flex justify-between">
                 <span>Hold Created:</span>
@@ -290,16 +274,16 @@ export default function ReservationPage() {
                 <span>Hold Expiration:</span>
                 <span className="font-mono text-slate-300">{new Date(reservation.expiresAt).toLocaleString()}</span>
               </div>
-              {reservation.confirmedAt && (
+              {displayStatus === "CONFIRMED" && (
                 <div className="flex justify-between text-emerald-400">
                   <span>Payment Confirmed:</span>
-                  <span className="font-mono">{new Date(reservation.confirmedAt).toLocaleString()}</span>
+                  <span className="font-mono">{reservation.confirmedAt ? new Date(reservation.confirmedAt).toLocaleString() : new Date().toLocaleString()}</span>
                 </div>
               )}
-              {reservation.releasedAt && (
+              {displayStatus === "RELEASED" && (
                 <div className="flex justify-between text-slate-300">
                   <span>Released At:</span>
-                  <span className="font-mono">{new Date(reservation.releasedAt).toLocaleString()}</span>
+                  <span className="font-mono">{reservation.releasedAt ? new Date(reservation.releasedAt).toLocaleString() : new Date().toLocaleString()}</span>
                 </div>
               )}
               {reservation.idempotencyKey && (
@@ -312,7 +296,7 @@ export default function ReservationPage() {
           </CardContent>
 
           <CardFooter className="bg-slate-950/30 border-t border-slate-800/60 p-6 flex flex-col sm:flex-row gap-3">
-            {isPending ? (
+            {displayStatus === "PENDING" ? (
               <>
                 <Button
                   onClick={handleRelease}
@@ -324,7 +308,7 @@ export default function ReservationPage() {
                 </Button>
                 <Button
                   onClick={handleConfirm}
-                  disabled={isProcessing}
+                  disabled={isProcessing || clientExpired}
                   className="w-full sm:flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
                 >
                   {isProcessing ? "Processing..." : "Confirm & Pay"}

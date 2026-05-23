@@ -6,7 +6,7 @@
 ## Local setup
 1. Clone the repo:
    ```bash
-   git clone https://github.com/sroshini504/allo-inventory.git
+   git clone https://github.com/RoshiniS504/allo-inventory.git
    cd allo-inventory
    ```
 2. Copy `.env.example` to `.env.local` (and `.env` for Prisma CLI) and fill in the connection details:
