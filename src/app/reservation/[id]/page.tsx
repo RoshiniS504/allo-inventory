@@ -165,8 +165,8 @@ export default function ReservationPage({ params }: { params: { id: string } }) 
 
   if (loading) {
     return (
-      <main className="container mx-auto px-4 py-16 flex items-center justify-center min-h-[70vh]">
-        <div className="max-w-[520px] w-full border border-[#E1E8EF] bg-white p-8 rounded-[20px] space-y-4 shadow-sm animate-pulse">
+      <main className="max-w-[480px] mx-auto w-full py-16 flex items-center justify-center min-h-[70vh]">
+        <div className="w-full border border-[#E1E8EF] bg-white p-8 rounded-[20px] space-y-4 shadow-sm animate-pulse">
           <div className="h-6 w-1/3 bg-slate-100 rounded" />
           <div className="h-28 bg-slate-100 rounded" />
           <div className="h-10 bg-slate-100 rounded" />
@@ -177,8 +177,8 @@ export default function ReservationPage({ params }: { params: { id: string } }) 
 
   if (!reservation) {
     return (
-      <main className="container mx-auto px-4 py-16 flex items-center justify-center min-h-[70vh]">
-        <Card className="max-w-[520px] w-full border-[#EF4444] bg-white rounded-[20px] shadow-lg">
+      <main className="max-w-[480px] mx-auto w-full py-16 flex items-center justify-center min-h-[70vh]">
+        <Card className="w-full border-[#EF4444] bg-white rounded-[20px] shadow-lg">
           <CardHeader className="p-8">
             <CardTitle className="text-[#EF4444] font-display text-xl font-bold">
               Reservation Not Found
@@ -201,7 +201,7 @@ export default function ReservationPage({ params }: { params: { id: string } }) 
   }
 
   return (
-    <main className="container mx-auto max-w-[520px] px-4 sm:px-0 py-10">
+    <main className="max-w-[480px] mx-auto w-full py-10">
       {/* Back button */}
       <button
         onClick={() => router.push("/")}

@@ -244,9 +244,9 @@ export default function HomePage() {
 
   if (isLoading) {
     return (
-      <main className="container mx-auto max-w-7xl relative z-10">
+      <main className="w-full relative z-10">
         {renderHero()}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[20px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, i) => (
             <SkeletonCard key={i} />
           ))}
@@ -257,7 +257,7 @@ export default function HomePage() {
 
   if (error) {
     return (
-      <main className="container mx-auto max-w-7xl relative z-10">
+      <main className="w-full relative z-10">
         {renderHero()}
         <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 bg-white border border-[#E1E8EF] rounded-[16px] p-8 max-w-lg mx-auto text-center shadow-sm">
           <div className="h-12 w-12 rounded-full bg-[#FEF2F2] flex items-center justify-center text-[#EF4444] mb-2">
@@ -281,7 +281,7 @@ export default function HomePage() {
 
   if (!products || products.length === 0) {
     return (
-      <main className="container mx-auto max-w-7xl relative z-10">
+      <main className="w-full relative z-10">
         {renderHero()}
         <div className="flex flex-col items-center justify-center min-h-[300px] bg-white border border-[#E1E8EF] rounded-[16px] p-8 max-w-lg mx-auto text-center shadow-sm">
           <p className="text-[#475569] text-sm mb-4">
@@ -296,10 +296,10 @@ export default function HomePage() {
   }
 
   return (
-    <main className="container mx-auto max-w-7xl relative z-10">
+    <main className="w-full relative z-10">
       {renderHero()}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[20px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {products.map((product, idx) => {
           const hasStock = product.stocks.some((s) => s.availableUnits > 0);
 
