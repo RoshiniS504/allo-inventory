@@ -3,12 +3,106 @@
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
+  --font-inter: 'Inter', sans-serif;
+  --font-dm-sans: 'DM Sans', sans-serif;
+  --font-jetbrains: 'JetBrains Mono', monospace;
+
+  /* Theme color codes as direct CSS variables for standard overrides */
+  --bg-color: #F0F4F8;
+  --surface-color: #FFFFFF;
+  --surface-2-color: #F7FAFB;
+  --border-color: #E1E8EF;
+  --primary-color: #0F6FBF;
+  --primary-dark-color: #0A5599;
+  --primary-light-color: #EBF4FF;
+  --accent-color: #00B89F;
+  --accent-light-color: #E6F8F5;
+  --warning-color: #F59E0B;
+  --warning-light-color: #FFFBEB;
+  --danger-color: #EF4444;
+  --danger-light-color: #FEF2F2;
+  --text-primary-color: #0F172A;
+  --text-secondary-color: #475569;
+  --text-muted-color: #94A3B8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background: var(--bg-color);
+  color: var(--text-primary-color);
+  font-family: var(--font-inter);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
 }
 
+/* Subtle page texture */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle at 20% 50%, #EBF4FF77 0%, transparent 50%),
+                    radial-gradient(circle at 80% 20%, #E6F8F577 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Global utility classes for micro-interactions */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+.live-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up {
+  animation: fadeInUp 0.4s ease forwards;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes urgency-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.urgency-pulse {
+  animation: urgency-pulse 1s ease-in-out infinite;
+}
+
+/* Accessibility settings for focus rings */
+*:focus-visible {
+  outline: 2px solid #0F6FBF !important;
+  outline-offset: 2px !important;
+}

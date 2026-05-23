@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
 interface ReservationDetails {
   id: string;
@@ -97,7 +96,7 @@ export default function ReservationPage({ params }: { params: { id: string } }) 
           description: "Your 10-minute hold has expired.",
         });
         setClientExpired(true);
-        setLocalStatus("EXPIRED"); // update UI immediately
+        setLocalStatus("EXPIRED");
         return;
       }
 
@@ -107,7 +106,7 @@ export default function ReservationPage({ params }: { params: { id: string } }) 
       }
 
       toast.success("Purchase confirmed successfully!");
-      setLocalStatus("CONFIRMED"); // update UI immediately — no page refresh
+      setLocalStatus("CONFIRMED");
     } catch (err) {
       toast.error("Network error");
     } finally {
@@ -127,7 +126,7 @@ export default function ReservationPage({ params }: { params: { id: string } }) 
 
       if (res.ok) {
         toast.success("Reservation cancelled and stock released.");
-        setLocalStatus("RELEASED"); // update UI immediately — no page refresh
+        setLocalStatus("RELEASED");
       } else {
         toast.error("Cancellation failed", { description: data.message });
       }
@@ -140,17 +139,37 @@ export default function ReservationPage({ params }: { params: { id: string } }) 
 
   const displayStatus = clientExpired ? "EXPIRED" : localStatus;
 
+  // Clock formatter helpers
   const mm = String(Math.floor(timeLeft / 60000)).padStart(2, "0");
   const ss = String(Math.floor((timeLeft % 60000) / 1000)).padStart(2, "0");
-  const isUrgent = timeLeft < 120000;
+  
+  // Expiry configuration values
+  const isUrgent = timeLeft < 120000; // < 2 minutes (amber/red)
+  const isCriticallyUrgent = timeLeft < 60000; // < 1 minute (red + pulsing)
+
+  // Timer Color logic
+  const getTimerColorClass = () => {
+    if (isCriticallyUrgent) return "text-[#EF4444] urgency-pulse";
+    if (isUrgent) return "text-[#F59E0B]";
+    return "text-[#0F172A]";
+  };
+
+  const getProgressBarColor = () => {
+    if (isCriticallyUrgent) return "bg-[#EF4444]";
+    if (isUrgent) return "bg-[#F59E0B]";
+    return "bg-[#00B89F]";
+  };
+
+  // Progress percentage (max hold time = 10 minutes = 600,000 ms)
+  const progressPercent = Math.min(100, (timeLeft / 600000) * 100);
 
   if (loading) {
     return (
       <main className="container mx-auto px-4 py-16 flex items-center justify-center min-h-[70vh]">
-        <div className="max-w-md w-full border border-slate-800 bg-slate-900/30 p-8 rounded-xl space-y-4 animate-pulse">
-          <div className="h-6 w-1/3 bg-slate-800 rounded"></div>
-          <div className="h-24 bg-slate-800 rounded"></div>
-          <div className="h-10 bg-slate-800 rounded"></div>
+        <div className="max-w-[520px] w-full border border-[#E1E8EF] bg-white p-8 rounded-[20px] space-y-4 shadow-sm animate-pulse">
+          <div className="h-6 w-1/3 bg-slate-100 rounded" />
+          <div className="h-28 bg-slate-100 rounded" />
+          <div className="h-10 bg-slate-100 rounded" />
         </div>
       </main>
     );
@@ -159,15 +178,20 @@ export default function ReservationPage({ params }: { params: { id: string } }) 
   if (!reservation) {
     return (
       <main className="container mx-auto px-4 py-16 flex items-center justify-center min-h-[70vh]">
-        <Card className="max-w-md w-full border-rose-950 bg-rose-950/15">
-          <CardHeader>
-            <CardTitle className="text-rose-400">Reservation Not Found</CardTitle>
+        <Card className="max-w-[520px] w-full border-[#EF4444] bg-white rounded-[20px] shadow-lg">
+          <CardHeader className="p-8">
+            <CardTitle className="text-[#EF4444] font-display text-xl font-bold">
+              Reservation Not Found
+            </CardTitle>
+            <CardDescription className="text-[#475569] mt-2">
+              The reservation code is invalid or has expired.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="text-slate-300">
-            The reservation code is invalid or has been permanently removed.
-          </CardContent>
-          <CardFooter>
-            <Button onClick={() => router.push("/")} className="w-full">
+          <CardFooter className="p-8 pt-0">
+            <Button
+              onClick={() => router.push("/")}
+              className="w-full bg-[#0F6FBF] hover:bg-[#0A5599] text-white rounded-[10px] h-11"
+            >
               Back to Catalog
             </Button>
           </CardFooter>
@@ -177,154 +201,185 @@ export default function ReservationPage({ params }: { params: { id: string } }) 
   }
 
   return (
-    <main className="container mx-auto px-4 py-12 flex items-center justify-center min-h-[85vh]">
-      <div className="max-w-xl w-full">
-        {/* State Banner indicators */}
-        {displayStatus === "CONFIRMED" && (
-          <div className="mb-6 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 flex items-center gap-3">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <p className="font-bold text-sm">Purchase Confirmed</p>
-              <p className="text-xs text-slate-300">Your inventory reservation has been locked permanently.</p>
-            </div>
-          </div>
-        )}
+    <main className="container mx-auto max-w-[520px] px-4 sm:px-0 py-10">
+      {/* Back button */}
+      <button
+        onClick={() => router.push("/")}
+        className="flex items-center gap-1.5 text-sm font-semibold text-[#0F6FBF] hover:underline mb-6 transition"
+      >
+        <span>←</span> Back to products
+      </button>
 
-        {displayStatus === "RELEASED" && (
-          <div className="mb-6 p-4 rounded-xl border border-slate-700 bg-slate-800/20 text-slate-400 flex items-center gap-3">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <p className="font-bold text-sm text-slate-300">Reservation Cancelled</p>
-              <p className="text-xs text-slate-500">Hold released. Inventory units returned to general warehouse stock.</p>
+      {/* Reservation Checkout Card */}
+      <Card className="bg-white border border-[#E1E8EF] rounded-[20px] p-8 shadow-md">
+        
+        {/* 1. Status Header */}
+        <div className="w-full">
+          {displayStatus === "PENDING" && (
+            <div className="text-center py-2 px-4 rounded-[10px] font-semibold text-sm bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A]">
+              ⏱ Reservation Active
             </div>
-          </div>
-        )}
-
-        {displayStatus === "EXPIRED" && (
-          <div className="mb-6 p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 flex items-center gap-3">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <p className="font-bold text-sm">Reservation Expired</p>
-              <p className="text-xs text-slate-300">The 10-minute payment timer lapsed. Stock has been auto-released.</p>
+          )}
+          {displayStatus === "CONFIRMED" && (
+            <div className="text-center py-2 px-4 rounded-[10px] font-semibold text-sm bg-[#E6F8F5] text-[#059669] border border-[#A7F3D0]">
+              ✓ Purchase Confirmed
             </div>
-          </div>
-        )}
+          )}
+          {displayStatus === "RELEASED" && (
+            <div className="text-center py-2 px-4 rounded-[10px] font-semibold text-sm bg-[#F1F5F9] text-[#64748B] border border-[#E2E8F0]">
+              ○ Reservation Cancelled
+            </div>
+          )}
+          {displayStatus === "EXPIRED" && (
+            <div className="text-center py-2 px-4 rounded-[10px] font-semibold text-sm bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA]">
+              ✕ Reservation Expired
+            </div>
+          )}
+        </div>
 
-        {displayStatus === "PENDING" && (
-          <div className="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="relative flex h-3 w-3 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+        {/* Render States */}
+        {displayStatus === "CONFIRMED" ? (
+          /* 6. CONFIRMED STATE */
+          <div className="flex flex-col items-center justify-center text-center py-8">
+            <div className="h-16 w-16 rounded-full bg-[#E6F8F5] border border-[#A7F3D0] flex items-center justify-center text-[#00B89F] mb-6">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <h2 className="text-[22px] font-bold font-display text-[#0F172A]">
+              Purchase confirmed!
+            </h2>
+            <p className="text-sm text-[#475569] mt-2 mb-8 max-w-sm">
+              Your order has been placed successfully. Stock units have been securely locked.
+            </p>
+            <Button
+              onClick={() => router.push("/")}
+              className="w-full bg-[#0F6FBF] hover:bg-[#0A5599] text-white rounded-[10px] h-11 text-sm font-semibold"
+            >
+              Back to Products
+            </Button>
+          </div>
+        ) : displayStatus === "RELEASED" || displayStatus === "EXPIRED" ? (
+          /* 7. EXPIRED/RELEASED STATE */
+          <div className="flex flex-col items-center justify-center text-center py-8">
+            <div className={`h-16 w-16 rounded-full flex items-center justify-center mb-6 ${
+              displayStatus === "EXPIRED" ? "bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626]" : "bg-[#F1F5F9] border border-[#E2E8F0] text-[#64748B]"
+            }`}>
+              {displayStatus === "EXPIRED" ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
+                  <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+              )}
+            </div>
+            <h2 className="text-[22px] font-bold font-display text-[#0F172A]">
+              {displayStatus === "EXPIRED" ? "Reservation expired" : "Reservation cancelled"}
+            </h2>
+            <p className="text-sm text-[#475569] mt-2 mb-8 max-w-sm">
+              {displayStatus === "EXPIRED" 
+                ? "The 10-minute payment timer lapsed. Stock has been auto-released."
+                : "The hold was cancelled and stock units have been returned to inventory."
+              }
+            </p>
+            <Button
+              onClick={() => router.push("/")}
+              className="w-full bg-[#0F6FBF] hover:bg-[#0A5599] text-white rounded-[10px] h-11 text-sm font-semibold"
+            >
+              Start a new reservation
+            </Button>
+          </div>
+        ) : (
+          /* PENDING RESERVATION DETAILS */
+          <>
+            {/* 2. Product Info */}
+            <div className="mt-6 mb-6">
+              <h2 className="text-[22px] font-bold font-display text-[#0F172A]">
+                {reservation.productName}
+              </h2>
+              <p className="font-mono text-xs text-[#94A3B8] mt-0.5 uppercase tracking-wider">
+                SKU: {reservation.sku} <span className="mx-1.5">|</span> ID: {reservation.id}
+              </p>
+
+              {/* 2-Column Info Grid */}
+              <div className="grid grid-cols-2 gap-4 mt-6">
+                <div className="bg-[#F7FAFB] border border-[#E1E8EF] p-4 rounded-xl">
+                  <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">
+                    Warehouse
+                  </span>
+                  <span className="text-sm font-bold text-[#475569] mt-1 block">
+                    {reservation.warehouseName}
+                  </span>
+                </div>
+                <div className="bg-[#F7FAFB] border border-[#E1E8EF] p-4 rounded-xl">
+                  <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">
+                    Quantity
+                  </span>
+                  <span className="text-sm font-bold text-[#475569] mt-1 block">
+                    {reservation.quantity} units
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Divider */}
+            <div className="h-[1px] bg-[#E1E8EF] my-6" />
+
+            {/* 4. Countdown Timer */}
+            <div className="flex flex-col items-center justify-center py-4 mb-6">
+              <span className="text-xs font-semibold text-[#94A3B8] uppercase tracking-wider mb-1">
+                Time remaining
               </span>
-              <div>
-                <p className="font-bold text-sm">Payment Holding Period</p>
-                <p className="text-xs text-slate-300">Complete checkout before expiration to secure your order.</p>
-              </div>
-            </div>
-            <div className={`text-2xl font-mono font-extrabold px-3 py-1 bg-slate-950/80 border rounded-lg shrink-0 ${isUrgent ? "text-rose-500 border-rose-500/50 animate-pulse" : "text-amber-400 border-amber-500/30"}`}>
-              {mm}:{ss}
-            </div>
-          </div>
-        )}
-
-        {/* Detailed Reservation Summary */}
-        <Card className="border-slate-800 bg-slate-900/40 shadow-2xl overflow-hidden">
-          <CardHeader className="bg-slate-950/30 border-b border-slate-800/60 pb-6">
-            <div className="flex justify-between items-center gap-2">
-              <span className="text-xs font-semibold text-emerald-500 uppercase tracking-wider">
-                Hold Transaction Summary
-              </span>
-              <Badge variant={displayStatus === "CONFIRMED" ? "success" : displayStatus === "RELEASED" ? "secondary" : displayStatus === "EXPIRED" ? "destructive" : "warning"}>
-                {displayStatus === "CONFIRMED" ? "Confirmed" : displayStatus === "RELEASED" ? "Released" : displayStatus === "EXPIRED" ? "Expired" : "Pending Hold"}
-              </Badge>
-            </div>
-            <CardTitle className="text-2xl font-bold mt-2 text-slate-50">
-              {reservation.productName}
-            </CardTitle>
-            <CardDescription className="font-mono text-xs uppercase text-slate-400 mt-1">
-              SKU: {reservation.sku} | Reservation ID: {reservation.id}
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="py-6 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-950/35 p-3 rounded-lg border border-slate-800/40">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Warehouse</p>
-                <p className="text-sm font-bold text-slate-200 mt-1">{reservation.warehouseName}</p>
-              </div>
-              <div className="bg-slate-950/35 p-3 rounded-lg border border-slate-800/40">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Quantity Reserved</p>
-                <p className="text-sm font-bold text-slate-200 mt-1">{reservation.quantity} units</p>
-              </div>
-            </div>
-
-            <div className="space-y-2 pt-2 text-xs border-t border-slate-800/40 text-slate-400">
-              <div className="flex justify-between">
-                <span>Hold Created:</span>
-                <span className="font-mono text-slate-300">{new Date(reservation.createdAt).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Hold Expiration:</span>
-                <span className="font-mono text-slate-300">{new Date(reservation.expiresAt).toLocaleString()}</span>
-              </div>
-              {displayStatus === "CONFIRMED" && (
-                <div className="flex justify-between text-emerald-400">
-                  <span>Payment Confirmed:</span>
-                  <span className="font-mono">{reservation.confirmedAt ? new Date(reservation.confirmedAt).toLocaleString() : new Date().toLocaleString()}</span>
-                </div>
-              )}
-              {displayStatus === "RELEASED" && (
-                <div className="flex justify-between text-slate-300">
-                  <span>Released At:</span>
-                  <span className="font-mono">{reservation.releasedAt ? new Date(reservation.releasedAt).toLocaleString() : new Date().toLocaleString()}</span>
-                </div>
-              )}
-              {reservation.idempotencyKey && (
-                <div className="flex justify-between pt-2 border-t border-dashed border-slate-800/50">
-                  <span>Idempotency Key:</span>
-                  <span className="font-mono text-[10px] break-all max-w-[250px]">{reservation.idempotencyKey}</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-
-          <CardFooter className="bg-slate-950/30 border-t border-slate-800/60 p-6 flex flex-col sm:flex-row gap-3">
-            {displayStatus === "PENDING" ? (
-              <>
-                <Button
-                  onClick={handleRelease}
-                  disabled={isProcessing}
-                  variant="outline"
-                  className="w-full sm:flex-1 border-slate-800 text-slate-300 hover:bg-slate-850"
-                >
-                  Cancel Hold
-                </Button>
-                <Button
-                  onClick={handleConfirm}
-                  disabled={isProcessing || clientExpired}
-                  className="w-full sm:flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
-                >
-                  {isProcessing ? "Processing..." : "Confirm & Pay"}
-                </Button>
-              </>
-            ) : (
-              <Button
-                onClick={() => router.push("/")}
-                className="w-full bg-slate-850 border border-slate-800 text-slate-300 hover:bg-slate-800"
+              
+              <div 
+                aria-live="polite" 
+                className={`text-[48px] font-mono font-bold tracking-wider leading-none transition-colors duration-500 ${getTimerColorClass()}`}
               >
-                Back to Catalog
+                {mm}:{ss}
+              </div>
+
+              {/* Smooth Progress Bar */}
+              <div className="w-full h-1 bg-[#E1E8EF] rounded-full mt-5 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-1000 linear ${getProgressBarColor()}`}
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 5. Action Buttons */}
+            <div className="flex flex-col gap-2.5">
+              <Button
+                onClick={handleConfirm}
+                disabled={isProcessing || clientExpired}
+                className="w-full h-12 bg-[#00B89F] hover:bg-[#009B85] text-white text-base font-semibold rounded-[12px] flex items-center justify-center gap-2 border-none shadow-[0_4px_12px_rgba(0,184,159,0.25)] hover:shadow-[0_6px_16px_rgba(0,184,159,0.35)] transition-all duration-150 hover:-translate-y-[1px]"
+              >
+                {isProcessing ? (
+                  <span className="spinner" />
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <span>Confirm Purchase</span>
+                  </>
+                )}
               </Button>
-            )}
-          </CardFooter>
-        </Card>
-      </div>
+
+              <Button
+                onClick={handleRelease}
+                disabled={isProcessing}
+                className="w-full h-[42px] bg-transparent border border-[#E1E8EF] text-[#475569] hover:bg-[#FEF2F2] hover:border-[#FECACA] hover:text-[#DC2626] text-sm font-semibold rounded-[12px] transition-all duration-150"
+              >
+                Cancel Reservation
+              </Button>
+            </div>
+          </>
+        )}
+      </Card>
     </main>
   );
 }
