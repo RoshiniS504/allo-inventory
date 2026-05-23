@@ -1,0 +1,52 @@
+{
+  "name": "allo-inventory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "format": "prettier --write .",
+    "prisma:generate": "prisma generate",
+    "prisma:seed": "prisma db seed",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "5.20.0",
+    "@radix-ui/react-dialog": "*",
+    "@radix-ui/react-slot": "*",
+    "@radix-ui/react-toast": "*",
+    "@radix-ui/react-use-controllable-state": "*",
+    "@radix-ui/react-visually-hidden": "*",
+    "@types/node": "*",
+    "@upstash/redis": "^1.25.2",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "next": "14.2.5",
+    "prisma": "5.20.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "sonner": "^1.7.0",
+    "tailwind-merge": "^2.5.4",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "*",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8.4.45",
+    "prettier": "^3.3.3",
+    "prettier-plugin-organize-imports": "*",
+    "tailwindcss": "^3.4.10",
+    "tsx": "^4.22.3",
+    "typescript": "^5.6.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
